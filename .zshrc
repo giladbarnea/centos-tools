@@ -32,5 +32,8 @@ alias ls='/usr/bin/ls --group-directories-first -Flaght --color=auto'
 
 alias ksm='k -n secure-management'
 
-
-# [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+# source <(kubectl completion bash)
+# complete -F __start_kubectl k
+# ISTIO_PATH=/opt/istio-1.6.7
+# PATH=$ISTIO_PATH/bin:$PATH
+# source $ISTIO_PATH/tools/istioctl.bash
