@@ -27,11 +27,15 @@ if type micro &>/dev/null; then
 	export EDITOR=micro
 fi
 # User configuration
-function cd() { builtin cd "$@" && /usr/bin/ls --group-directories-first -Flaght --color=auto && echo "$PWD"; }
+function cd() { builtin cd "$@" && /usr/bin/ls --group-directories-first -Flaght --color=auto && echo "\x1b[1;97m$PWD\x1b[0m"; }
 alias ls='/usr/bin/ls --group-directories-first -Flaght --color=auto'
 
 alias ksm='k -n secure-management'
 
+function ksm.logs(){
+	if [[ -z "$1" ]]; then echo "<APP> required!" 1>&2; return 1; fi
+	ksm logs -l app="$1" -c "$1" -f
+}
 # source <(kubectl completion bash)
 # complete -F __start_kubectl k
 # ISTIO_PATH=/opt/istio-1.6.7
