@@ -32,10 +32,8 @@ alias ls='/usr/bin/ls --group-directories-first -Flaght --color=auto'
 
 alias ksm='k -n secure-management'
 
-function ksm.logs(){
-	if [[ -z "$1" ]]; then echo "<APP> required!" 1>&2; return 1; fi
-	ksm logs -l app="$1" -c "$1" -f
-}
+[[ -f "/root/.local/share/lscolors.sh" ]] && source "/root/.local/share/lscolors.sh"
+[[ -f "/root/kub.sh" ]] && source "/root/kub.sh"
 # source <(kubectl completion bash)
 # complete -F __start_kubectl k
 # ISTIO_PATH=/opt/istio-1.6.7

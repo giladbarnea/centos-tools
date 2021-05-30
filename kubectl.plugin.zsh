@@ -155,10 +155,3 @@ alias kgcj='kubectl get cronjob'
 alias kecj='kubectl edit cronjob'
 alias kdcj='kubectl describe cronjob'
 alias kdelcj='kubectl delete cronjob'
-
-# Custom
-function cd() { builtin cd "$@" && /usr/bin/ls --group-directories-first -Flaght --color=auto && echo "$PWD"; }
-alias ls='/usr/bin/ls --group-directories-first -Flaght --color=auto'
-
-alias ksm='k -n secure-management'
-export EDITOR=micro
