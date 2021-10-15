@@ -1,41 +1,75 @@
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
-
-# Path to your oh-my-zsh installation.
-export ZSH=$HOME/.oh-my-zsh
-if [[ ! -d $ZSH ]]; then
-	echo "Does not exist: $ZSH"
-	return 1
-fi
 export COLORTERM=truecolor
 export TERM=xterm-256color
-
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-# refined, josh, fino-time
-ZSH_THEME="fino-time"
-HISTCONTROL=ignoreboth
-
 # export DISPLAY=:0
-plugins=(zsh-autosuggestions fast-syntax-highlighting kubectl colored-man-pages)
+HISTCONTROL=ignoreboth
+ISTIO_PATH=/opt/istio-1.6.7
+PATH=$ISTIO_PATH/bin:$PATH
+source $ISTIO_PATH/tools/istioctl.bash  # is there .zsh?
+[[ -f "/root/.local/share/lscolors.sh" ]] && source "/root/.local/share/lscolors.sh"
 
-source $ZSH/oh-my-zsh.sh
-export COLORTERM=truecolor
-export TERM=xterm-256color
-
-# bindkey -M emacs "^ "  _expand_alias
 if type micro &>/dev/null; then
 	export EDITOR=micro
 fi
-# User configuration
-function cd() { builtin cd "$@" && /usr/bin/ls --group-directories-first -Flaght --color=auto && echo "\x1b[1;97m$PWD\x1b[0m"; }
-alias ls='/usr/bin/ls --group-directories-first -Flaght --color=auto'
 
-alias ksm='k -n secure-management'
+unalias ls 2>/dev/null
+function ls(){
+  local dest="${1:-$PWD}"
+  /bin/ls --group-directories-first -Flaght --color=auto "$dest"
+  printf "%b\n" "\x1b[1;97m$dest\x1b[0m"
+}
+function cd() { builtin cd "$@" && ls ; }
+function ksm() { kubectl -n secure-management ; }
+function k.pods.names(){
+  ksm get pods --no-headers | cut -d ' ' -f 1
+  return $?
+}
+function k.logs(){
+  ksm logs -l app="$1" -c "$1" -f
+  return $?
+}
+function k.nodeofpod(){
+  ksm get pods -o wide | grep "$1" | grep -E -o 'k8s-n-[0-9]+'
+}
+function k.exec-bash(){
+  local podname="$1"
+  shift
+  ksm exec -it "$podname" -- bash "$@"
+}
 
-[[ -f "/root/.local/share/lscolors.sh" ]] && source "/root/.local/share/lscolors.sh"
-[[ -f "/root/kub.sh" ]] && source "/root/kub.sh"
-# source <(kubectl completion bash)
-# complete -F __start_kubectl k
-# ISTIO_PATH=/opt/istio-1.6.7
-# PATH=$ISTIO_PATH/bin:$PATH
-# source $ISTIO_PATH/tools/istioctl.bash
+# kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
+# kubectl -n secure-management scale deployment --replicas=0 rsevents
+
+# publish / consume a kafka message:
+#  exec -ti into kafka
+#  unset JMX_PORT
+#  kafka-console-producer.sh --broker-list localhost:9092 --topic as-rsevents-mock-consume-topic
+# >{"device_event_blocked_traffic":{"message":{"timestamp":"2021-08-23T15:53:00Z","trace_id":"trace_id"}}}
+#
+#  kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-rsevents-mock-consume-topic --from-beginning
+
+# ** Dashboard
+# cat dashboard_token dashboard_url
+
+
+if [[ "${SHELL##*/}" == zsh && -n "$ZSH_VERSION" ]]; then
+  export ZSH=${ZSH:-$HOME/.oh-my-zsh}
+  source <(kubectl completion zsh)
+  if [[ -d $ZSH ]]; then
+    # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
+    # refined, josh, fino-time
+    ZSH_THEME="fino-time"
+
+    plugins=(zsh-autosuggestions fast-syntax-highlighting kubectl colored-man-pages)
+
+    source $ZSH/oh-my-zsh.sh
+
+    # bindkey -M emacs "^ "  _expand_alias
+  else
+    echo "[WARN] ZSH Does not exist: $ZSH" 1>&2
+  fi
+else
+  source <(kubectl completion bash)
+fi
+
+complete -F __start_kubectl k
+complete -F __start_kubectl ksm
