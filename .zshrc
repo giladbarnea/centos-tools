@@ -59,7 +59,7 @@ if [[ "${SHELL##*/}" == zsh && -n "$ZSH_VERSION" ]]; then
     # refined, josh, fino-time
     ZSH_THEME="fino-time"
 
-    plugins=(zsh-autosuggestions fast-syntax-highlighting kubectl colored-man-pages)
+    plugins=(zsh-autosuggestions copybuffer sudo extract kubectl colored-man-pages fast-syntax-highlighting)
 
     source $ZSH/oh-my-zsh.sh
 
@@ -69,6 +69,7 @@ if [[ "${SHELL##*/}" == zsh && -n "$ZSH_VERSION" ]]; then
   fi
 else
   source <(kubectl completion bash)
+  export PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 fi
 
 complete -F __start_kubectl k
