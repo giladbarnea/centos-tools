@@ -3,8 +3,10 @@ export TERM=xterm-256color
 # export DISPLAY=:0
 HISTCONTROL=ignoreboth
 ISTIO_PATH=/opt/istio-1.6.7
-PATH=$ISTIO_PATH/bin:$PATH
-source $ISTIO_PATH/tools/istioctl.bash  # is there .zsh?
+if [ -e "$ISTIO_PATH" ]; then
+  PATH=$ISTIO_PATH/bin:$PATH
+  source $ISTIO_PATH/tools/istioctl.bash  # is there .zsh?
+fi
 [[ -f "/root/.local/share/lscolors.sh" ]] && source "/root/.local/share/lscolors.sh"
 
 if type micro &>/dev/null; then
@@ -18,9 +20,9 @@ function ls(){
   printf "%b\n" "\x1b[1;97m$dest\x1b[0m"
 }
 function cd() { builtin cd "$@" && ls ; }
-function ksm() { kubectl -n secure-management ; }
+function ksm() { kubectl -n secure-management "$@" ; }
 function k.pods.names(){
-  ksm get pods --no-headers | cut -d ' ' -f 1
+  ksm get pods --no-headers "$@" | cut -d ' ' -f 1
   return $?
 }
 function k.logs(){
@@ -28,7 +30,10 @@ function k.logs(){
   return $?
 }
 function k.nodeofpod(){
-  ksm get pods -o wide | grep "$1" | grep -E -o 'k8s-n-[0-9]+'
+  ksm get pods -o wide -l app="$1" | grep "$1" | grep -E -o 'k8s-n-[0-9]+'
+}
+function k.asmver(){
+  ksm get pods -l app="$1" -o yaml | grep -o -m1 -E "image: .*$1:(.+)"
 }
 function k.exec-bash(){
   local podname="$1"
