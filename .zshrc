@@ -16,7 +16,7 @@ fi
 unalias ls 2>/dev/null
 function ls(){
   local dest="${1:-$PWD}"
-  /bin/ls --group-directories-first -Flaght --color=auto "$dest"
+  /bin/ls --group-directories-first -Fagh --color=auto -v "$dest"
   printf "%b\n" "\x1b[1;97m$dest\x1b[0m"
 }
 function cd() { builtin cd "$@" && ls ; }
@@ -40,6 +40,7 @@ function k.exec-bash(){
   shift
   ksm exec -it "$podname" -- bash "$@"
 }
+
 
 # kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
 # kubectl -n secure-management scale deployment --replicas=0 rsevents
