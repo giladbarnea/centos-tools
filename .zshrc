@@ -1,11 +1,14 @@
+# xclip: https://centos.pkgs.org/7/epel-aarch64/xclip-0.12-5.el7.aarch64.rpm.html
+# xsel: https://centos.pkgs.org/7/epel-aarch64/xsel-1.2.0-15.el7.aarch64.rpm.html
+
 export COLORTERM=truecolor
 export TERM=xterm-256color
 # export DISPLAY=:0
 HISTCONTROL=ignoreboth
-ISTIO_PATH=/opt/istio-1.6.7
-if [ -e "$ISTIO_PATH" ]; then
-  PATH=$ISTIO_PATH/bin:$PATH
-  source $ISTIO_PATH/tools/istioctl.bash  # is there .zsh?
+if [ -e "/opt/istio-1.6.7" ]; then
+  export ISTIO_PATH=/opt/istio-1.6.7
+  export PATH="$ISTIO_PATH/bin:$PATH"
+  source "$ISTIO_PATH"/tools/istioctl.bash  # is there .zsh?
 fi
 [[ -f "/root/.local/share/lscolors.sh" ]] && source "/root/.local/share/lscolors.sh"
 
@@ -15,37 +18,55 @@ fi
 
 unalias ls 2>/dev/null
 function ls(){
-  local dest="${1:-$PWD}"
-  /bin/ls --group-directories-first -Fagh --color=auto -v "$dest"
-  printf "%b\n" "\x1b[1;97m$dest\x1b[0m"
+  printf "%b" "ls $*"
+  # shellcheck disable=SC2124
+  local dest="${@:(-1)}"
+  if [[ -z "$dest" || ! -d "$dest" ]]; then
+    dest="$PWD"
+  fi
+  /usr/bin/ls --group-directories-first -Fagh --color=auto -v "$dest"
+  printf "\n%b\n" "\x1b[1;97m$dest\x1b[0m"
 }
 function cd() { builtin cd "$@" && ls ; }
-function ksm() { kubectl -n secure-management "$@" ; }
+alias ksm="kubectl --namespace=secure-management"
+# function ksm() { kubectl -n secure-management "$@" ; }
 function k.pods.names(){
+  log.debug "ksm get pods --no-headers $* | cut -d ' ' -f 1"
   ksm get pods --no-headers "$@" | cut -d ' ' -f 1
   return $?
 }
 function k.logs(){
-  ksm logs -l app="$1" -c "$1" -f
+  local app="$1"
+  shift || return 1
+  log.debug "ksm logs -l app=$app -f"
+  ksm logs -l app="$app" -f
   return $?
 }
 function k.nodeofpod(){
-  ksm get pods -o wide -l app="$1" | grep "$1" | grep -E -o 'k8s-n-[0-9]+'
+  local app="$1"
+  shift || return 1
+  log.debug "ksm get pods -o wide -l app=$app | grep $app | grep -E -o 'k8s-n-[0-9]+'"
+  ksm get pods -o wide -l app="$app" | grep "$app" | grep -E -o 'k8s-n-[0-9]+'
 }
 function k.asmver(){
-  ksm get pods -l app="$1" -o yaml | grep -o -m1 -E "image: .*$1:(.+)"
+  # ksm get asm-version -o jsonpath='{.items[0].metadata.name}'
+  local app="$1"
+  shift || return 1
+  log.debug "ksm get pods -l app=$app -o yaml | grep -o -m1 -E \"image: .*$app:(.+)\""
+  ksm get pods -l app="$app" -o yaml | grep -o -m1 -E "image: .*$app:(.+)"
 }
 function k.exec-bash(){
-  local podname="$1"
-  shift
-  ksm exec -it "$podname" -- bash "$@"
+  local pod="$1"
+  shift || return 1
+  log.debug "ksm exec -it $pod -- bash \"$*\""
+  ksm exec -it "$pod" -- bash "$@"
 }
 
 
 # kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
 # kubectl -n secure-management scale deployment --replicas=0 rsevents
 
-# publish / consume a kafka message:
+#-----[ Kafka: Publish / Consume ]-----
 #  exec -ti into kafka
 #  unset JMX_PORT
 #  kafka-console-producer.sh --broker-list localhost:9092 --topic as-rsevents-mock-consume-topic
@@ -53,30 +74,56 @@ function k.exec-bash(){
 #
 #  kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-rsevents-mock-consume-topic --from-beginning
 
-# ** Dashboard
+#-----[ Dashboard ]-----
 # cat dashboard_token dashboard_url
 
 
-if [[ "${SHELL##*/}" == zsh && -n "$ZSH_VERSION" ]]; then
-  export ZSH=${ZSH:-$HOME/.oh-my-zsh}
-  source <(kubectl completion zsh)
-  if [[ -d $ZSH ]]; then
-    # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-    # refined, josh, fino-time
-    ZSH_THEME="fino-time"
+if [[ -n "$ZSH_VERSION" ]]; then
+  if [[ "${SHELL##*/}" == zsh ]]; then
+    if { [[ -z "$ZSH" || ! -d "$ZSH" ]] && [[ -d "$HOME/.oh-my-zsh" ]] ; }; then
+      # ZSH var is not set, or $ZSH is not a directory, but "$HOME/.oh-my-zsh" is a directory
+      export ZSH="$HOME/.oh-my-zsh"
+    fi
+    if type complete &>/dev/null; then
+      source <(kubectl completion zsh)
+    fi
+    if [[ -d "$ZSH" ]]; then
+      # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
+      # refined, josh, fino-time
+      ZSH_THEME="fino-time"
 
-    plugins=(zsh-autosuggestions copybuffer sudo extract kubectl colored-man-pages fast-syntax-highlighting)
+      plugins=()
+      if [[ -d "$ZSH/custom/plugins/zsh-autosuggestions" ]]; then
+        plugins+=(zsh-autosuggestions)
+      fi
+      plugins+=(copybuffer sudo extract kubectl colored-man-pages docker-compose)
+      if [[ -d "$ZSH/custom/plugins/fast-syntax-highlighting" ]]; then
+        plugins+=(fast-syntax-highlighting)
+      fi
 
-    source $ZSH/oh-my-zsh.sh
+      source "$ZSH"/oh-my-zsh.sh
 
-    # bindkey -M emacs "^ "  _expand_alias
-  else
-    echo "[WARN] ZSH Does not exist: $ZSH" 1>&2
+      setopt extendedglob
+      setopt auto_menu
+      bindkey -M emacs "^ "  _expand_alias
+    else
+      echo "[WARN] \$ZSH Does not exist: $ZSH" 1>&2
+    fi
   fi
 else
-  source <(kubectl completion bash)
+  if type complete &>/dev/null; then
+    source <(kubectl completion bash)
+#    if [[ -f /root/ksm-completion-bash ]]; then
+#      source /root/ksm-completion-bash
+#    fi
+#    if [[ -f /root/k-completion-bash ]]; then
+#      source /root/k-completion-bash
+#    fi
+  fi
   export PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 fi
 
-complete -F __start_kubectl k
-complete -F __start_kubectl ksm
+
+{ ! type isdefined \
+  && source <(wget -qO- https://raw.githubusercontent.com/giladbarnea/bashscripts/master/util.sh) ;
+} &>/dev/null
