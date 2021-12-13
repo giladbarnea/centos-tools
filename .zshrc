@@ -66,7 +66,7 @@ function k.exec-bash(){
 # kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
 # kubectl -n secure-management scale deployment --replicas=0 rsevents
 
-#-----[ Kafka: Publish / Consume ]-----
+# -----[ Kafka: Publish / Consume ]-----
 #  exec -ti into kafka
 #  unset JMX_PORT
 #  kafka-console-producer.sh --broker-list localhost:9092 --topic as-rsevents-mock-consume-topic
@@ -74,7 +74,12 @@ function k.exec-bash(){
 #
 #  kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-rsevents-mock-consume-topic --from-beginning
 
-#-----[ Dashboard ]-----
+# -----[ Certs ]-----
+# kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode
+# kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.key']}" | base64 --decode
+# kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.crt']}" | base64 --decode
+
+# -----[ Dashboard ]-----
 # cat dashboard_token dashboard_url
 
 
