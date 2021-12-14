@@ -1,4 +1,6 @@
+# https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/
 # xclip: https://centos.pkgs.org/7/epel-aarch64/xclip-0.12-5.el7.aarch64.rpm.html
+#        https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/x/xclip-0.12-5.el7.x86_64.rpm
 # xsel: https://centos.pkgs.org/7/epel-aarch64/xsel-1.2.0-15.el7.aarch64.rpm.html
 
 export COLORTERM=truecolor
@@ -66,13 +68,21 @@ function k.exec-bash(){
 # kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
 # kubectl -n secure-management scale deployment --replicas=0 rsevents
 
-# -----[ Kafka: Publish / Consume ]-----
+# ======[ Kafka ]======
+# ========================================
 #  exec -ti into kafka
 #  unset JMX_PORT
+#
+# -----[ General ]-----
+# List topics: kafka-topics.sh --list --zookeeper zookeeper:2181
+# -----[ Publish ]-----
 #  kafka-console-producer.sh --broker-list localhost:9092 --topic as-rsevents-mock-consume-topic
 # >{"device_event_blocked_traffic":{"message":{"timestamp":"2021-08-23T15:53:00Z","trace_id":"trace_id"}}}
 #
-#  kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-rsevents-mock-consume-topic --from-beginning
+# -----[ Consume ]-----
+# kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-rsevents-mock-consume-topic --from-beginning
+# kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --topic ...
+# kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --whitelist 'as-rs.*|as-rsevents.*|hs-routers.*|as-hs.*'
 
 # -----[ Certs ]-----
 # kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode
@@ -88,9 +98,6 @@ if [[ -n "$ZSH_VERSION" ]]; then
     if { [[ -z "$ZSH" || ! -d "$ZSH" ]] && [[ -d "$HOME/.oh-my-zsh" ]] ; }; then
       # ZSH var is not set, or $ZSH is not a directory, but "$HOME/.oh-my-zsh" is a directory
       export ZSH="$HOME/.oh-my-zsh"
-    fi
-    if type complete &>/dev/null; then
-      source <(kubectl completion zsh)
     fi
     if [[ -d "$ZSH" ]]; then
       # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
@@ -113,17 +120,20 @@ if [[ -n "$ZSH_VERSION" ]]; then
       bindkey -M emacs "^ "  _expand_alias
     else
       echo "[WARN] \$ZSH Does not exist: $ZSH" 1>&2
+      if type complete &>/dev/null; then
+        source <(kubectl completion zsh)
+      fi
     fi
   fi
-else
+else # not ZSH_VERSION
   if type complete &>/dev/null; then
     source <(kubectl completion bash)
-#    if [[ -f /root/ksm-completion-bash ]]; then
-#      source /root/ksm-completion-bash
-#    fi
-#    if [[ -f /root/k-completion-bash ]]; then
-#      source /root/k-completion-bash
-#    fi
+    # if [[ -f /root/ksm-completion-bash ]]; then
+    #   source /root/ksm-completion-bash
+    # fi
+    # if [[ -f /root/k-completion-bash ]]; then
+    #   source /root/k-completion-bash
+    # fi
   fi
   export PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 fi
