@@ -1,67 +1,87 @@
 # https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/
-# xclip: https://centos.pkgs.org/7/epel-aarch64/xclip-0.12-5.el7.aarch64.rpm.html
-#        https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/x/xclip-0.12-5.el7.x86_64.rpm
-# xsel: https://centos.pkgs.org/7/epel-aarch64/xsel-1.2.0-15.el7.aarch64.rpm.html
+# xclip: https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/x/xclip-0.12-5.el7.x86_64.rpm
+
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
+
+[[ -f "/root/.local/share/lscolors.sh" ]] && source "/root/.local/share/lscolors.sh"
 
 export COLORTERM=truecolor
 export TERM=xterm-256color
 # export DISPLAY=:0
 HISTCONTROL=ignoreboth
-if [ -e "/opt/istio-1.6.7" ]; then
-  export ISTIO_PATH=/opt/istio-1.6.7
-  export PATH="$ISTIO_PATH/bin:$PATH"
-  source "$ISTIO_PATH"/tools/istioctl.bash  # is there .zsh?
-fi
-[[ -f "/root/.local/share/lscolors.sh" ]] && source "/root/.local/share/lscolors.sh"
-
-if type micro &>/dev/null; then
-	export EDITOR=micro
-fi
+export HISTORY_IGNORE="(exit|clear|disown|bg|fg)"
 
 unalias ls 2>/dev/null
-function ls(){
-  printf "%b" "ls $*"
-  # shellcheck disable=SC2124
-  local dest="${@:(-1)}"
-  if [[ -z "$dest" || ! -d "$dest" ]]; then
-    dest="$PWD"
-  fi
-  /usr/bin/ls --group-directories-first -Fagh --color=auto -v "$dest"
-  printf "\n%b\n" "\x1b[1;97m$dest\x1b[0m"
-}
+alias ls='ls --color=auto -lahFv --group-directories-first'
+#function ls(){
+#  printf "%b" "ls $*"
+#  local dest
+#  local ls_args=()
+#  while [[ $# -gt 0 ]]; do
+#    case "$1" in
+#      -*)
+#        ls_args+=("$1")
+#        shift
+#        ;;
+#      *)
+#        if [[ -n "$dest" ]]; then
+#          ls_args+=("$1")
+#        else
+#          dest="$1"
+#        fi
+#        shift
+#        ;;
+#    esac
+#  done
+#  if [[ -z "$dest" ]]; then
+#    dest="$PWD"
+#  fi
+#
+#  /usr/bin/ls --group-directories-first -Faghv --color=auto "$dest" "${ls_args[@]}"
+#  printf "\n%b\n" "\x1b[1;97m$dest\x1b[0m"
+#}
 function cd() { builtin cd "$@" && ls ; }
-alias ksm="kubectl --namespace=secure-management"
+alias ksm="kubectl -n secure-management"
 # function ksm() { kubectl -n secure-management "$@" ; }
 function k.pods.names(){
-  log.debug "ksm get pods --no-headers $* | cut -d ' ' -f 1"
-  ksm get pods --no-headers "$@" | cut -d ' ' -f 1
+  log.debug "kubectl -n secure-management get pods --no-headers $* | cut -d ' ' -f 1"
+  kubectl -n secure-management get pods --no-headers "$@" | cut -d ' ' -f 1
   return $?
 }
 function k.logs(){
   local app="$1"
   shift || return 1
-  log.debug "ksm logs -l app=$app -f"
-  ksm logs -l app="$app" -f
+  log.debug "kubectl -n secure-management logs -l app=$app -f"
+  kubectl -n secure-management logs -l app="$app" -f
   return $?
 }
 function k.nodeofpod(){
   local app="$1"
   shift || return 1
-  log.debug "ksm get pods -o wide -l app=$app | grep $app | grep -E -o 'k8s-n-[0-9]+'"
-  ksm get pods -o wide -l app="$app" | grep "$app" | grep -E -o 'k8s-n-[0-9]+'
+  log.debug "kubectl -n secure-management get pods -o wide -l app=$app | grep $app | grep -E -o 'k8s-n-[0-9]+'"
+  kubectl -n secure-management get pods -o wide -l app="$app" | grep "$app" | grep -E -o 'k8s-n-[0-9]+'
 }
 function k.asmver(){
-  # ksm get asm-version -o jsonpath='{.items[0].metadata.name}'
+  # kubectl -n secure-management get asm-version -o jsonpath='{.items[0].metadata.name}'
   local app="$1"
   shift || return 1
-  log.debug "ksm get pods -l app=$app -o yaml | grep -o -m1 -E \"image: .*$app:(.+)\""
-  ksm get pods -l app="$app" -o yaml | grep -o -m1 -E "image: .*$app:(.+)"
+  log.debug "kubectl -n secure-management get pods -l app=$app -o yaml | grep -o -m1 -E \"image: .*$app:(.+)\""
+  kubectl -n secure-management get pods -l app="$app" -o yaml | grep -o -m1 -E "image: .*$app:(.+)"
 }
 function k.exec-bash(){
   local pod="$1"
   shift || return 1
-  log.debug "ksm exec -it $pod -- bash \"$*\""
-  ksm exec -it "$pod" -- bash "$@"
+  log.debug "kubectl -n secure-management exec -it $pod -- bash \"$*\""
+  kubectl -n secure-management exec -it "$pod" -- bash "$@"
+}
+function k.port-forward(){
+  :
+#  kubectl -n secure-management port-forward deployment/mongo 28015:27017
+#  kubectl -n secure-management port-forward pods/mongo-75f59d57f4-4nd6q 28015:27017
+#  kubectl -n secure-management port-forward mongo-75f59d57f4-4nd6q 28015:27017
 }
 
 
@@ -108,7 +128,7 @@ if [[ -n "$ZSH_VERSION" ]]; then
       if [[ -d "$ZSH/custom/plugins/zsh-autosuggestions" ]]; then
         plugins+=(zsh-autosuggestions)
       fi
-      plugins+=(copybuffer sudo extract kubectl colored-man-pages docker-compose)
+      plugins+=(copybuffer extract kubectl colored-man-pages helm)
       if [[ -d "$ZSH/custom/plugins/fast-syntax-highlighting" ]]; then
         plugins+=(fast-syntax-highlighting)
       fi
@@ -126,19 +146,29 @@ if [[ -n "$ZSH_VERSION" ]]; then
     fi
   fi
 else # not ZSH_VERSION
-  if type complete &>/dev/null; then
-    source <(kubectl completion bash)
-    # if [[ -f /root/ksm-completion-bash ]]; then
-    #   source /root/ksm-completion-bash
-    # fi
-    # if [[ -f /root/k-completion-bash ]]; then
-    #   source /root/k-completion-bash
-    # fi
-  fi
+#  if type complete &>/dev/null; then   # i think .bashrc already loads completions
+#    source <(kubectl completion bash)
+#    # if [[ -f /root/ksm-completion-bash ]]; then
+#    #   source /root/ksm-completion-bash
+#    # fi
+#    # if [[ -f /root/k-completion-bash ]]; then
+#    #   source /root/k-completion-bash
+#    # fi
+#  fi
   export PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 fi
+declare istio_path=$(find /opt -maxdepth 1 -type d -name 'istio*')
+if [ -e "$istio_path" ]; then
+  export ISTIO_PATH="$istio_path"
+  export PATH="$ISTIO_PATH/bin:$PATH"
+  autoload bashcompinit
+  bashcompinit
+  source "$ISTIO_PATH"/tools/istioctl.bash 2>/dev/null
+fi
+if type micro &>/dev/null; then
+	export EDITOR=micro
+fi
 
-
-{ ! type isdefined \
-  && source <(wget -qO- https://raw.githubusercontent.com/giladbarnea/bashscripts/master/util.sh) ;
-} &>/dev/null
+#{ ! type isdefined \
+#  && source <(wget -qO- https://raw.githubusercontent.com/giladbarnea/bashscripts/master/util.sh) ;
+#} &>/dev/null
