@@ -15,36 +15,13 @@ HISTCONTROL=ignoreboth
 export HISTORY_IGNORE="(exit|clear|disown|bg|fg)"
 
 unalias ls 2>/dev/null
-alias ls='ls --color=auto -lahFv --group-directories-first'
-#function ls(){
-#  printf "%b" "ls $*"
-#  local dest
-#  local ls_args=()
-#  while [[ $# -gt 0 ]]; do
-#    case "$1" in
-#      -*)
-#        ls_args+=("$1")
-#        shift
-#        ;;
-#      *)
-#        if [[ -n "$dest" ]]; then
-#          ls_args+=("$1")
-#        else
-#          dest="$1"
-#        fi
-#        shift
-#        ;;
-#    esac
-#  done
-#  if [[ -z "$dest" ]]; then
-#    dest="$PWD"
-#  fi
-#
-#  /usr/bin/ls --group-directories-first -Faghv --color=auto "$dest" "${ls_args[@]}"
-#  printf "\n%b\n" "\x1b[1;97m$dest\x1b[0m"
-#}
+function ls(){
+  local dest="${1:-$PWD}"
+  command ls "$dest" -Faghv --color=auto --group-directories-first "${@:2}" && \
+  printf "\n\x1b[1;97m%s\x1b[0m\n\n" "$(realpath "$dest")"
+}
 function cd() { builtin cd "$@" && ls ; }
-alias ksm="kubectl -n secure-management"
+alias ksm="k -n secure-management"
 # function ksm() { kubectl -n secure-management "$@" ; }
 function k.pods.names(){
   log.debug "kubectl -n secure-management get pods --no-headers $* | cut -d ' ' -f 1"
@@ -84,6 +61,38 @@ function k.port-forward(){
 #  kubectl -n secure-management port-forward mongo-75f59d57f4-4nd6q 28015:27017
 }
 
+function k.configmap(){
+  :
+  # mkdir rsevents-perf
+  # k create configmap rsevents-perf-cmap --from-file=/root/rsevents-perf   # must abs path
+
+  # spec:
+  #   volumes:
+  #     - name: rsevents-perf-volume
+  #     configMap:
+  #       name: rsevents-perf-cmap
+  #       # defaultMode: 420
+  #   containers:
+  #     volumeMounts:
+  #       - name: rsevents-perf-volume
+  #         mountPath: /app/main/test
+  #         readOnly: true
+  #         # subPath: sync_handler.py
+
+  # env:
+  # - name: RSEVENTS_TESTS_TIMESTAMP
+  #   value: '2022-01-02T10:35:05Z'
+  # - name: RSEVENTS_TESTS_ACCOUNT_ID
+  #   value: GILAD_ACCOUNT_0
+  # - name: RSEVENTS_TESTS_DEVICE_ID
+  #   value: GILAD_DEVICE_ID_0
+  # - name: RSEVENTS_TESTS_ROUTER_ID
+  #   value: GILAD_DEVICE_ID_0
+  # - name: RSEVENTS_TESTS_USER_ID
+  #   value: GILAD_USER_0
+  # - name: STATISTICS_INTERVAL_MS
+  #   value: '333'
+}
 
 # kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
 # kubectl -n secure-management scale deployment --replicas=0 rsevents
