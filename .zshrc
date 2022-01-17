@@ -23,6 +23,8 @@ function ls(){
 function cd() { builtin cd "$@" && ls ; }
 alias ksm="k -n secure-management"
 # function ksm() { kubectl -n secure-management "$@" ; }
+
+
 function k.pods.names(){
   log.debug "kubectl -n secure-management get pods --no-headers $* | cut -d ' ' -f 1"
   kubectl -n secure-management get pods --no-headers "$@" | cut -d ' ' -f 1
@@ -63,18 +65,31 @@ function k.port-forward(){
 
 function k.configmap(){
   :
-  # mkdir rsevents-perf
-  # k create configmap rsevents-perf-cmap --from-file=/root/rsevents-perf   # must abs path
+  # kubectl edit configmap -n <namespace> <configMapName> -o yaml
+  # mkdir rs-mult
+  # k create configmap rs-mult-cmap --from-file=/root/rs-mult   # must abs path
 
   # spec:
   #   volumes:
-  #     - name: rsevents-perf-volume
-  #     configMap:
-  #       name: rsevents-perf-cmap
-  #       # defaultMode: 420
+  #     - name: rs-mult-vol-main
+  #       configMap:
+  #         name: rs-mult-main
+  #         defaultMode: 420
+  #     - name: rs-mult-vol-test-mocks
+  #       configMap:
+  #         name: rs-mult-test-mocks
+  #         defaultMode: 420
+  #     - name: rs-mult-vol-infra-eb-consumers-proto-consumer
+  #       configMap:
+  #         name: rs-mult-infra-eb-consumers-proto-consumer
+  #         defaultMode: 420
+  #     - name: rs-mult-vol-infra-eb-consumers-init
+  #       configMap:
+  #         name: rs-mult-infra-eb-consumers-init
+  #         defaultMode: 420
   #   containers:
   #     volumeMounts:
-  #       - name: rsevents-perf-volume
+  #       - name: rs-mult-vol-main
   #         mountPath: /app/main/test
   #         readOnly: true
   #         # subPath: sync_handler.py
@@ -94,16 +109,31 @@ function k.configmap(){
   #   value: '333'
 }
 
+function rseval(){
+  i=0
+  for foo in $(kubectl -n secure-management get pods --no-headers | grep rsevents | cut -d ' ' -f 1); do
+    eval "rsevents${i}=$foo"
+  	echo "rsevents${i}: $foo"
+    ((i++))
+  done
+}
+
+# ===============[ kubectl ]===============
+# =========================================
+# https://kubernetes.io/docs/reference/kubectl/cheatsheet/
 # kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
 # kubectl -n secure-management scale deployment --replicas=0 rsevents
+# KUBE_EDITOR=micro k edit deployments.apps rsevents
 
-# ======[ Kafka ]======
-# ========================================
+# ===============[ Kafka ]===============
+# =======================================
 #  exec -ti into kafka
 #  unset JMX_PORT
 #
 # -----[ General ]-----
 # List topics: kafka-topics.sh --list --zookeeper zookeeper:2181
+# Delete messages: /opt/bitnami/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 --topic as-hs-events-traffic-topic --alter --add-config retention.ms=1000
+
 # -----[ Publish ]-----
 #  kafka-console-producer.sh --broker-list localhost:9092 --topic as-rsevents-mock-consume-topic
 # >{"device_event_blocked_traffic":{"message":{"timestamp":"2021-08-23T15:53:00Z","trace_id":"trace_id"}}}
@@ -120,6 +150,13 @@ function k.configmap(){
 
 # -----[ Dashboard ]-----
 # cat dashboard_token dashboard_url
+
+# -----[ Connections ]-----
+# k get svc -n secure-management | grep istio-ingress
+# k get vs -n secure-management
+
+# -----[ Misc ]-----
+# kafka-consumer-perf-test.sh --bootstrap-server localhost:9092 --topic as-hs-events-traffic-topic --messages 100000 | cut -d ',' -f 5-6
 
 
 if [[ -n "$ZSH_VERSION" ]]; then
