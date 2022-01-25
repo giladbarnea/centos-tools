@@ -151,9 +151,13 @@ function rseval(){
 # -----[ Dashboard ]-----
 # cat dashboard_token dashboard_url
 
-# -----[ Connections ]-----
-# k get svc -n secure-management | grep istio-ingress
-# k get vs -n secure-management
+# -----[ Connections ]------
+# ### In /etc/hosts file ###
+# external_ip="$(k -n secure-management get svc | grep istio-ingress | python -c 'from sys import stdin; print(stdin.read().split()[3])')"    # e.g 10.xxx.xxx.13
+# kafka_host="$(kubectl -n secure-management get vs | grep -Eo 'kafka.default.[[:alpha:]]+')"   # e.g kafka.default.todd
+# <external_ip> isp.default.<machine_name>
+# <external_ip> kafka.default.<machine_name>
+# kafka_external_port="$(kubectl -n secure-management get svc | grep kafka-0 | grep -Po '(?<=:)\w+')"   # e.g 30094
 
 # -----[ Misc ]-----
 # kafka-consumer-perf-test.sh --bootstrap-server localhost:9092 --topic as-hs-events-traffic-topic --messages 100000 | cut -d ',' -f 5-6
