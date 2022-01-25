@@ -147,6 +147,15 @@ function rseval(){
 # kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode
 # kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.key']}" | base64 --decode
 # kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.crt']}" | base64 --decode
+# or:
+# ssh $todd kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data}" 2>/dev/null \
+#   | python3 -c <<EOF
+# import json, sys, base64
+# data = json.loads(sys.stdin.read())
+# def decode(key):
+#     return base64.decodebytes(data[key].encode()).decode()
+# decode('ca.crt'); decode('client.key'); decode('client.crt')
+# EOF
 
 # -----[ Dashboard ]-----
 # cat dashboard_token dashboard_url
