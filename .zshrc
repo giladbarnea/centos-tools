@@ -49,6 +49,15 @@ function k.asmver(){
   shift || return 1
   log.debug "kubectl -n secure-management get pods -l app=$app -o yaml | grep -o -m1 -E \"image: .*$app:(.+)\""
   kubectl -n secure-management get pods -l app="$app" -o yaml | grep -o -m1 -E "image: .*$app:(.+)"
+
+
+  # To install:
+  # wget http://artifactory.rdlab.local/artifactory/allot-secure-gradle-dev-local/Secure-Management/30.1/30.1.1/30.1.1_1663/Secure-Management-30.1.1.1663.tar
+  # extract
+  # cd into currently installed version, i.e /opt/ASM1610
+  # ./install.sh then choose Uninstall
+  # then cd into extracted tar file
+  # ./install.sh
 }
 function k.exec-bash(){
   local pod="$1"
@@ -58,9 +67,12 @@ function k.exec-bash(){
 }
 function k.port-forward(){
   :
-#  kubectl -n secure-management port-forward deployment/mongo 28015:27017
-#  kubectl -n secure-management port-forward pods/mongo-75f59d57f4-4nd6q 28015:27017
-#  kubectl -n secure-management port-forward mongo-75f59d57f4-4nd6q 28015:27017
+  kubectl -n secure-management port-forward deployment/mongo 28015:27017
+  kubectl -n secure-management port-forward pods/mongo-75f59d57f4-4nd6q 28015:27017
+  kubectl -n secure-management port-forward mongo-75f59d57f4-4nd6q 28015:27017
+
+  # Listen on port 8888 on all addresses, forwarding to 5000 in the pod
+  kubectl port-forward --address 0.0.0.0 pod/mypod 8888:5000
 }
 
 function k.configmap(){
@@ -118,62 +130,88 @@ function rseval(){
   done
 }
 
+# =========================================
 # ===============[ kubectl ]===============
 # =========================================
 # https://kubernetes.io/docs/reference/kubectl/cheatsheet/
 # kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
 # kubectl -n secure-management scale deployment --replicas=0 rsevents
 # KUBE_EDITOR=micro k edit deployments.apps rsevents
+# cat dashboard_token dashboard_url
 
+# =======================================
 # ===============[ Kafka ]===============
 # =======================================
 #  exec -ti into kafka
 #  unset JMX_PORT
 #
 # -----[ General ]-----
-# List topics: kafka-topics.sh --list --zookeeper zookeeper:2181
-# Delete messages: /opt/bitnami/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 --topic as-hs-events-traffic-topic --alter --add-config retention.ms=1000
+function kafka.general(){
+ # List topics:
+ kafka-topics.sh --list --zookeeper zookeeper:2181
+
+ # How many unconsumed messages in topic:
+ kafka-consumer-groups.sh --bootstrap-server kafka:9092 --group rsevents --describe --offsets | grep as-hs-events-traffic-topic | awk '{lag+=$6} END {print lag}'
+
+ # Delete messages:
+ /opt/bitnami/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 --topic as-hs-events-traffic-topic --alter --add-config retention.ms=0
+ # OR:
+ sed -i 's/delete.topic.enable=false/delete.topic.enable=true/g' /opt/bitnami/kafka/config/server.properties
+ /opt/bitnami/kafka/bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic as-hs-events-traffic-topic
+ # OR:
+ echo ' {"partitions": [{"topic": "as-hs-events-traffic-topic", "partition": 0, "offset": 80000}], "version":1 }' > offsetfile.json
+ kafka-delete-records.sh --bootstrap-server localhost:9092 --offset-json-file ./offsetfile.json
+ for i in $(seq 100); do kafka-delete-records.sh --bootstrap-server localhost:9092 --offset-json-file <( echo "{\"partitions\": [{\"topic\": \"as-hs-events-traffic-topic\", \"partition\": $i, \"offset\": -1}], \"version\":1 }" ); done
+
+ # Performance test:
+ kafka-consumer-perf-test.sh --bootstrap-server localhost:9092 --topic as-hs-events-traffic-topic --messages 100000 | cut -d ',' -f 5-6
+}
 
 # -----[ Publish ]-----
-#  kafka-console-producer.sh --broker-list localhost:9092 --topic as-rsevents-mock-consume-topic
-# >{"device_event_blocked_traffic":{"message":{"timestamp":"2021-08-23T15:53:00Z","trace_id":"trace_id"}}}
-#
+function kafka.publish(){
+  kafka-console-producer.sh --broker-list localhost:9092 --topic as-hs-events-traffic-topic
+  #>{"device_event_blocked_traffic":{"message":{"timestamp":"2021-08-23T15:53:00Z","trace_id":"trace_id"}}}
+}
+
 # -----[ Consume ]-----
-# kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-rsevents-mock-consume-topic --from-beginning
-# kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --topic ...
-# kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --whitelist 'as-rs.*|as-rsevents.*|hs-routers.*|as-hs.*'
+function kafka.consume(){
+  kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-hs-events-traffic-topic --from-beginning
+  kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --topic ...
+  kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --whitelist 'as-rs.*|as-rsevents.*|hs-routers.*|as-hs.*'
+}
 
 # -----[ Certs ]-----
-# kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode
-# kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.key']}" | base64 --decode
-# kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.crt']}" | base64 --decode
-# or:
-# ssh $todd kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data}" 2>/dev/null \
-#   | python3 -c <<EOF
-# import json, sys, base64
-# data = json.loads(sys.stdin.read())
-# def decode(key):
-#     return base64.decodebytes(data[key].encode()).decode()
-# decode('ca.crt'); decode('client.key'); decode('client.crt')
-# EOF
-
-# -----[ Dashboard ]-----
-# cat dashboard_token dashboard_url
+function kafka.consume(){
+  kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode > /tmp/ca.crt
+  kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.key']}" | base64 --decode > /tmp/client.key
+  kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.crt']}" | base64 --decode > /tmp/client.crt
+  # or (doesn't completely work):
+  # shellcheck disable=SC2259
+  ssh $todd kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data}" \
+    | python3 <<-EOF
+  import json, sys, base64
+  data = json.loads(sys.stdin.read())
+  def decode(key):
+      return base64.decodebytes(data[key].encode()).decode()
+  print(decode('ca.crt'))
+EOF
+}
 
 # -----[ Connections ]------
-# ### In /etc/hosts file ###
-# external_ip="$(k -n secure-management get svc | grep istio-ingress | python -c 'from sys import stdin; print(stdin.read().split()[3])')"    # e.g 10.xxx.xxx.13
-# kafka_host="$(kubectl -n secure-management get vs | grep -Eo 'kafka.default.[[:alpha:]]+')"   # e.g kafka.default.todd
-# <external_ip> isp.default.<machine_name>
-# <external_ip> kafka.default.<machine_name>
-# kafka_external_port="$(kubectl -n secure-management get svc | grep kafka-0 | grep -Po '(?<=:)\w+')"   # e.g 30094
+function kafka.connections(){
+  external_ip="$(k -n secure-management get svc | grep istio-ingress | python -c 'from sys import stdin; print(stdin.read().split()[3])')"    # e.g 10.xxx.xxx.13
+  kafka_host="$(kubectl -n secure-management get vs | grep -Eo 'kafka.default.[[:alpha:]]+')"   # e.g kafka.default.todd
+  ### In /etc/hosts file:
+  # <external_ip> isp.default.<machine_name>
+  # <external_ip> kafka.default.<machine_name>
+  kafka_external_port="$(kubectl -n secure-management get svc | grep kafka-0 | grep -Po '(?<=:)\w+')"   # e.g 30094
+}
 
-# -----[ Misc ]-----
-# kafka-consumer-perf-test.sh --bootstrap-server localhost:9092 --topic as-hs-events-traffic-topic --messages 100000 | cut -d ',' -f 5-6
+# =======================================
+# ===============[ Zsh ]=================
+# =======================================
 
-
-if [[ -n "$ZSH_VERSION" ]]; then
-  if [[ "${SHELL##*/}" == zsh ]]; then
+function setup_zsh(){
     if { [[ -z "$ZSH" || ! -d "$ZSH" ]] && [[ -d "$HOME/.oh-my-zsh" ]] ; }; then
       # ZSH var is not set, or $ZSH is not a directory, but "$HOME/.oh-my-zsh" is a directory
       export ZSH="$HOME/.oh-my-zsh"
@@ -203,6 +241,11 @@ if [[ -n "$ZSH_VERSION" ]]; then
         source <(kubectl completion zsh)
       fi
     fi
+
+}
+if [[ -n "$ZSH_VERSION" ]]; then
+  if [[ "${SHELL##*/}" == zsh ]]; then
+    setup_zsh
   fi
 else # not ZSH_VERSION
 #  if type complete &>/dev/null; then   # i think .bashrc already loads completions
@@ -216,6 +259,7 @@ else # not ZSH_VERSION
 #  fi
   export PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 fi
+
 declare istio_path=$(find /opt -maxdepth 1 -type d -name 'istio*')
 if [ -e "$istio_path" ]; then
   export ISTIO_PATH="$istio_path"
@@ -224,10 +268,12 @@ if [ -e "$istio_path" ]; then
   bashcompinit
   source "$ISTIO_PATH"/tools/istioctl.bash 2>/dev/null
 fi
+
 if type micro &>/dev/null; then
 	export EDITOR=micro
 fi
 
 #{ ! type isdefined \
 #  && source <(wget -qO- https://raw.githubusercontent.com/giladbarnea/bashscripts/master/util.sh) ;
+
 #} &>/dev/null
