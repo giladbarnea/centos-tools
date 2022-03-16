@@ -24,12 +24,18 @@ function cd() { builtin cd "$@" && ls ; }
 alias ksm="k -n secure-management"
 # function ksm() { kubectl -n secure-management "$@" ; }
 
-
+function k.all.greplogs() {
+	kubectl -n secure-management get pods | cut -d ' ' -f 1 | while read -r pod; do
+		printf "\x1b[97;1m%s:\x1b[0m\n\n" "${pod}"
+		kubectl -n secure-management logs "$pod" | grep "$@"
+	done
+}
 function k.pods.names(){
   log.debug "kubectl -n secure-management get pods --no-headers $* | cut -d ' ' -f 1"
   kubectl -n secure-management get pods --no-headers "$@" | cut -d ' ' -f 1
   return $?
 }
+
 function k.logs(){
   local app="$1"
   shift || return 1
@@ -37,12 +43,14 @@ function k.logs(){
   kubectl -n secure-management logs -l app="$app" -f
   return $?
 }
+
 function k.nodeofpod(){
   local app="$1"
   shift || return 1
   log.debug "kubectl -n secure-management get pods -o wide -l app=$app | grep $app | grep -E -o 'k8s-n-[0-9]+'"
   kubectl -n secure-management get pods -o wide -l app="$app" | grep "$app" | grep -E -o 'k8s-n-[0-9]+'
 }
+
 function k.asmver(){
   # kubectl -n secure-management get asm-version -o jsonpath='{.items[0].metadata.name}'
   local app="$1"
@@ -59,6 +67,7 @@ function k.asmver(){
   # then cd into extracted tar file
   # ./install.sh
 }
+
 function k.exec-bash(){
   local pod="$1"
   shift || return 1
@@ -71,8 +80,8 @@ function k.port-forward(){
   kubectl -n secure-management port-forward pods/mongo-75f59d57f4-4nd6q 28015:27017
   kubectl -n secure-management port-forward mongo-75f59d57f4-4nd6q 28015:27017
 
-  # Listen on port 8888 on all addresses, forwarding to 5000 in the pod
-  kubectl port-forward --address 0.0.0.0 pod/mypod 8888:5000
+  # Listen on port 6666 on all addresses, forwarding to 5000 in the pod. Afterwards -> curl 0.0.0.0:6666/customization/fonts
+  kubectl -n secure-management port-forward --address 0.0.0.0 customconfig-6864b5db87-lmhnk 6666:5000
 }
 
 function k.configmap(){
