@@ -22,11 +22,13 @@ function ls(){
 }
 function cd() { builtin cd "$@" && ls ; }
 alias ksm="k -n secure-management"
+complete -F __start_kubectl ksm
 # function ksm() { kubectl -n secure-management "$@" ; }
 
 function k.all.greplogs() {
-	kubectl -n secure-management get pods | cut -d ' ' -f 1 | while read -r pod; do
-		printf "\x1b[97;1m%s:\x1b[0m\n\n" "${pod}"
+	kubectl -n secure-management get pods --no-headers | cut -d ' ' -f 1 | while read -r pod; do
+		printf "\n\x1b[97;1m%s:\x1b[0m\n" "${pod}"
+		# kubectl -n secure-management exec -t $pod -- env
 		kubectl -n secure-management logs "$pod" | grep "$@"
 	done
 }
