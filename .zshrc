@@ -10,28 +10,41 @@ alias mv='mv -i'
 
 export COLORTERM=truecolor
 export TERM=xterm-256color
-# export DISPLAY=:0
-HISTCONTROL=ignoreboth
-export HISTORY_IGNORE="(exit|clear|disown|bg|fg)"
 
 unalias ls 2>/dev/null
 function ls(){
   local dest="${1:-$PWD}"
-  command ls "$dest" -Faghv --color=auto --group-directories-first "${@:2}" && \
+  command ls "$dest" -Flahv --color=auto --group-directories-first "${@:2}" && \
   printf "\n\x1b[1;97m%s\x1b[0m\n\n" "$(realpath "$dest")"
 }
 function cd() { builtin cd "$@" && ls ; }
 alias ksm="k -n secure-management"
 complete -F __start_kubectl ksm
+kubectl completion bash | sed -E 's/(complete -o default .*-F __start_kubectl) kubectl/\1 ksm/g' | source /dev/stdin # maybe not needed?
 # function ksm() { kubectl -n secure-management "$@" ; }
-
+# kubectl get deployments.apps -n secure-management gateway-isp -o yaml | sed 's/image: secure-management\/gateway-isp:30.1.500.87/image: local-0\/gateway-isp:latest/g' | kubectl replace -f /dev/stdin
+function k.pod(){
+  kubectl -n secure-management get pods --no-headers | grep "${1}" | cut -d ' ' -f 1
+}
 function k.all.greplogs() {
 	kubectl -n secure-management get pods --no-headers | cut -d ' ' -f 1 | while read -r pod; do
+		if ! res="$(kubectl -n secure-management logs "$pod" | grep "$@")" || [[ -z "$res" ]]; then
+			continue
+		fi
 		printf "\n\x1b[97;1m%s:\x1b[0m\n" "${pod}"
-		# kubectl -n secure-management exec -t $pod -- env
-		kubectl -n secure-management logs "$pod" | grep "$@"
+		echo "$res"
 	done
 }
+function k.all.grepenv(){
+	kubectl -n secure-management get pods --no-headers | cut -d ' ' -f 1 | while read -r pod; do
+		if ! res="$(kubectl -n secure-management exec -t "$pod" -- env 2>/dev/null | grep "$@")" || [[ -z "$res" ]]; then
+			continue
+		fi
+		printf "\n\x1b[97;1m%s:\x1b[0m\n" "${pod}"
+		echo "$res"
+	done
+}
+
 function k.pods.names(){
   log.debug "kubectl -n secure-management get pods --no-headers $* | cut -d ' ' -f 1"
   kubectl -n secure-management get pods --no-headers "$@" | cut -d ' ' -f 1
@@ -158,8 +171,14 @@ function rseval(){
 #
 # -----[ General ]-----
 function kafka.general(){
+	# https://docs.cloudera.com/runtime/7.2.10/kafka-managing/topics/kafka-manage-cli-overview.html <- examples for each .sh file
  # List topics:
  kafka-topics.sh --list --zookeeper zookeeper:2181
+
+ # find logs with size > 0
+ find bitnami/kafka/data/ -name *.log -size +0b -ls | grep as-hs-events-traffic-topic | sort -r
+
+ unset JMX_PORT; /opt/bitnami/kafka/bin/kafka-run-class.sh kafka.tools.DumpLogSegments --deep-iteration –print-data-log --files /bitnami/kafka/data/__consumer_offsets-10/00000000000000000000.log
 
  # How many unconsumed messages in topic:
  kafka-consumer-groups.sh --bootstrap-server kafka:9092 --group rsevents --describe --offsets | grep as-hs-events-traffic-topic | awk '{lag+=$6} END {print lag}'
