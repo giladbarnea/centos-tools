@@ -211,7 +211,7 @@ function kafka.consume(){
 }
 
 # -----[ Certs ]-----
-function kafka.consume(){
+function kafka.certs(){
   kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode > /tmp/ca.crt
   kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.key']}" | base64 --decode > /tmp/client.key
   kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.crt']}" | base64 --decode > /tmp/client.crt
