@@ -18,17 +18,32 @@ function ls(){
   printf "\n\x1b[1;97m%s\x1b[0m\n\n" "$(realpath "$dest")"
 }
 function cd() { builtin cd "$@" && ls ; }
-alias ksm="k -n secure-management"
-complete -F __start_kubectl ksm
-kubectl completion bash | sed -E 's/(complete -o default .*-F __start_kubectl) kubectl/\1 ksm/g' | source /dev/stdin # maybe not needed?
-# function ksm() { kubectl -n secure-management "$@" ; }
-# kubectl get deployments.apps -n secure-management gateway-isp -o yaml | sed 's/image: secure-management\/gateway-isp:30.1.500.87/image: local-0\/gateway-isp:latest/g' | kubectl replace -f /dev/stdin
+
+# =========================================
+# ===============[ kubectl ]===============
+# =========================================
+# https://kubernetes.io/docs/reference/kubectl/cheatsheet/
+# kubectl -n "${K_NS}" delete pods rsevents-66468bd865-4jpqv
+# kubectl -n "${K_NS}" scale deployment --replicas=0 rsevents
+# KUBE_EDITOR=micro k edit deployments.apps rsevents
+# cat dashboard_token dashboard_url
+
+export K_NS="${K_NS:-gilad-sandbox}"
+
+alias kg="kubectl -n ${K_NS}"
+#complete -F __start_kubectl kg
+#kubectl completion bash | sed -E 's/(complete -o default .*-F __start_kubectl) kubectl/\1 kg/g' | source /dev/stdin # maybe not needed?
+
+# kubectl get deployments.apps -n "${K_NS}" gateway-isp -o yaml | sed 's/image: secure-management\/gateway-isp:30.1.500.87/image: local-0\/gateway-isp:latest/g' | kubectl replace -f /dev/stdin
+k -n gilad-sandbox describe deployments eta-api
+
 function k.pod(){
-  kubectl -n secure-management get pods --no-headers | grep "${1}" | cut -d ' ' -f 1
+  kubectl -n "${K_NS}" get pods --no-headers | grep "${1}" | cut -d ' ' -f 1
 }
 function k.all.greplogs() {
-	kubectl -n secure-management get pods --no-headers | cut -d ' ' -f 1 | while read -r pod; do
-		if ! res="$(kubectl -n secure-management logs "$pod" | grep "$@")" || [[ -z "$res" ]]; then
+	local pod
+	kubectl -n "${K_NS}}" get pods --no-headers | cut -d ' ' -f 1 | while read -r pod; do
+		if ! res="$(kubectl -n "${K_NS}" logs "$pod" | grep "$@")" || [[ -z "$res" ]]; then
 			continue
 		fi
 		printf "\n\x1b[97;1m%s:\x1b[0m\n" "${pod}"
@@ -36,8 +51,9 @@ function k.all.greplogs() {
 	done
 }
 function k.all.grepenv(){
-	kubectl -n secure-management get pods --no-headers | cut -d ' ' -f 1 | while read -r pod; do
-		if ! res="$(kubectl -n secure-management exec -t "$pod" -- env 2>/dev/null | grep "$@")" || [[ -z "$res" ]]; then
+	local pod
+	kubectl -n "${K_NS}}" get pods --no-headers | cut -d ' ' -f 1 | while read -r pod; do
+		if ! res="$(kubectl -n "${K_NS}" exec -t "$pod" -- env 2>/dev/null | grep "$@")" || [[ -z "$res" ]]; then
 			continue
 		fi
 		printf "\n\x1b[97;1m%s:\x1b[0m\n" "${pod}"
@@ -46,57 +62,48 @@ function k.all.grepenv(){
 }
 
 function k.pods.names(){
-  log.debug "kubectl -n secure-management get pods --no-headers $* | cut -d ' ' -f 1"
-  kubectl -n secure-management get pods --no-headers "$@" | cut -d ' ' -f 1
+  log.debug "kubectl -n ${K_NS} get pods --no-headers $* | cut -d ' ' -f 1"
+  kubectl -n "${K_NS}" get pods --no-headers "$@" | cut -d ' ' -f 1
   return $?
 }
 
 function k.logs(){
   local app="$1"
   shift || return 1
-  log.debug "kubectl -n secure-management logs -l app=$app -f"
-  kubectl -n secure-management logs -l app="$app" -f
+  log.debug "kubectl -n ${K_NS} logs -l app=$app -f"
+  kubectl -n "${K_NS}" logs -l app="$app" -f
   return $?
 }
 
 function k.nodeofpod(){
   local app="$1"
   shift || return 1
-  log.debug "kubectl -n secure-management get pods -o wide -l app=$app | grep $app | grep -E -o 'k8s-n-[0-9]+'"
-  kubectl -n secure-management get pods -o wide -l app="$app" | grep "$app" | grep -E -o 'k8s-n-[0-9]+'
+  log.debug "kubectl -n ${K_NS} get pods -o wide -l app=$app | grep $app | grep -E -o 'k8s-n-[0-9]+'"
+  kubectl -n "${K_NS}" get pods -o wide -l app="$app" | grep "$app" | grep -E -o 'k8s-n-[0-9]+'
 }
 
 function k.asmver(){
-  # kubectl -n secure-management get asm-version -o jsonpath='{.items[0].metadata.name}'
+  # kubectl -n "${K_NS}}" get asm-version -o jsonpath='{.items[0].metadata.name}'
   local app="$1"
   shift || return 1
-  log.debug "kubectl -n secure-management get pods -l app=$app -o yaml | grep -o -m1 -E \"image: .*$app:(.+)\""
-  kubectl -n secure-management get pods -l app="$app" -o yaml | grep -o -m1 -E "image: .*$app:(.+)"
-
-
-  # To install:
-  # wget http://artifactory.rdlab.local/artifactory/allot-secure-gradle-dev-local/Secure-Management/30.1/30.1.1/30.1.1_1663/Secure-Management-30.1.1.1663.tar
-  # extract
-  # cd into currently installed version, i.e /opt/ASM1610
-  # ./install.sh then choose Uninstall
-  # then cd into extracted tar file
-  # ./install.sh
+  log.debug "kubectl -n ${K_NS} get pods -l app=$app -o yaml | grep -o -m1 -E \"image: .*$app:(.+)\""
+  kubectl -n "${K_NS}" get pods -l app="$app" -o yaml | grep -o -m1 -E "image: .*$app:(.+)"
 }
 
 function k.exec-bash(){
   local pod="$1"
   shift || return 1
-  log.debug "kubectl -n secure-management exec -it $pod -- bash \"$*\""
-  kubectl -n secure-management exec -it "$pod" -- bash "$@"
+  log.debug "kubectl -n ${K_NS} exec -it $pod -- bash \"$*\""
+  kubectl -n "${K_NS}" exec -it "$pod" -- bash "$@"
 }
 function k.port-forward(){
   :
-  kubectl -n secure-management port-forward deployment/mongo 28015:27017
-  kubectl -n secure-management port-forward pods/mongo-75f59d57f4-4nd6q 28015:27017
-  kubectl -n secure-management port-forward mongo-75f59d57f4-4nd6q 28015:27017
+  kubectl -n "${K_NS}" port-forward deployment/mongo 28015:27017
+  kubectl -n "${K_NS}" port-forward pods/mongo-75f59d57f4-4nd6q 28015:27017
+  kubectl -n "${K_NS}" port-forward mongo-75f59d57f4-4nd6q 28015:27017
 
   # Listen on port 6666 on all addresses, forwarding to 5000 in the pod. Afterwards -> curl 0.0.0.0:6666/customization/fonts
-  kubectl -n secure-management port-forward --address 0.0.0.0 customconfig-6864b5db87-lmhnk 6666:5000
+  kubectl -n "${K_NS}" port-forward --address 0.0.0.0 customconfig-6864b5db87-lmhnk 6666:5000
 }
 
 function k.configmap(){
@@ -145,23 +152,6 @@ function k.configmap(){
   #   value: '333'
 }
 
-function rseval(){
-  i=0
-  for foo in $(kubectl -n secure-management get pods --no-headers | grep rsevents | cut -d ' ' -f 1); do
-    eval "rsevents${i}=$foo"
-  	echo "rsevents${i}: $foo"
-    ((i++))
-  done
-}
-
-# =========================================
-# ===============[ kubectl ]===============
-# =========================================
-# https://kubernetes.io/docs/reference/kubectl/cheatsheet/
-# kubectl -n secure-management delete pods rsevents-66468bd865-4jpqv
-# kubectl -n secure-management scale deployment --replicas=0 rsevents
-# KUBE_EDITOR=micro k edit deployments.apps rsevents
-# cat dashboard_token dashboard_url
 
 # =======================================
 # ===============[ Kafka ]===============
@@ -176,48 +166,48 @@ function kafka.general(){
  kafka-topics.sh --list --zookeeper zookeeper:2181
 
  # find logs with size > 0
- find bitnami/kafka/data/ -name *.log -size +0b -ls | grep as-hs-events-traffic-topic | sort -r
+ find bitnami/kafka/data/ -name *.log -size +0b -ls | grep TOPIC | sort -r
 
  unset JMX_PORT; /opt/bitnami/kafka/bin/kafka-run-class.sh kafka.tools.DumpLogSegments --deep-iteration –print-data-log --files /bitnami/kafka/data/__consumer_offsets-10/00000000000000000000.log
 
  # How many unconsumed messages in topic:
- kafka-consumer-groups.sh --bootstrap-server kafka:9092 --group rsevents --describe --offsets | grep as-hs-events-traffic-topic | awk '{lag+=$6} END {print lag}'
+ kafka-consumer-groups.sh --bootstrap-server kafka:9092 --group rsevents --describe --offsets | grep TOPIC | awk '{lag+=$6} END {print lag}'
 
  # Delete messages:
- /opt/bitnami/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 --topic as-hs-events-traffic-topic --alter --add-config retention.ms=0
+ /opt/bitnami/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 --topic TOPIC --alter --add-config retention.ms=0
  # OR:
  sed -i 's/delete.topic.enable=false/delete.topic.enable=true/g' /opt/bitnami/kafka/config/server.properties
- /opt/bitnami/kafka/bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic as-hs-events-traffic-topic
+ /opt/bitnami/kafka/bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic TOPIC
  # OR:
- echo ' {"partitions": [{"topic": "as-hs-events-traffic-topic", "partition": 0, "offset": 80000}], "version":1 }' > offsetfile.json
+ echo ' {"partitions": [{"topic": "TOPIC", "partition": 0, "offset": 80000}], "version":1 }' > offsetfile.json
  kafka-delete-records.sh --bootstrap-server localhost:9092 --offset-json-file ./offsetfile.json
- for i in $(seq 100); do kafka-delete-records.sh --bootstrap-server localhost:9092 --offset-json-file <( echo "{\"partitions\": [{\"topic\": \"as-hs-events-traffic-topic\", \"partition\": $i, \"offset\": -1}], \"version\":1 }" ); done
+ for i in $(seq 100); do kafka-delete-records.sh --bootstrap-server localhost:9092 --offset-json-file <( echo "{\"partitions\": [{\"topic\": \"TOPIC\", \"partition\": $i, \"offset\": -1}], \"version\":1 }" ); done
 
  # Performance test:
- kafka-consumer-perf-test.sh --bootstrap-server localhost:9092 --topic as-hs-events-traffic-topic --messages 100000 | cut -d ',' -f 5-6
+ kafka-consumer-perf-test.sh --bootstrap-server localhost:9092 --topic TOPIC --messages 100000 | cut -d ',' -f 5-6
 }
 
 # -----[ Publish ]-----
 function kafka.publish(){
-  kafka-console-producer.sh --broker-list localhost:9092 --topic as-hs-events-traffic-topic
+  kafka-console-producer.sh --broker-list localhost:9092 --topic TOPIC
   #>{"device_event_blocked_traffic":{"message":{"timestamp":"2021-08-23T15:53:00Z","trace_id":"trace_id"}}}
 }
 
 # -----[ Consume ]-----
 function kafka.consume(){
-  kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic as-hs-events-traffic-topic --from-beginning
+  kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic TOPIC --from-beginning
   kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --topic ...
   kafka-console-consumer.sh --bootstrap-server kafka-0:9092 --whitelist 'as-rs.*|as-rsevents.*|hs-routers.*|as-hs.*'
 }
 
 # -----[ Certs ]-----
 function kafka.certs(){
-  kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode > /tmp/ca.crt
-  kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.key']}" | base64 --decode > /tmp/client.key
-  kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data['client\.crt']}" | base64 --decode > /tmp/client.crt
+  kubectl -n "${K_NS}" get secret kafka-external-certificates -o jsonpath="{.data['ca\.crt']}" | base64 --decode > /tmp/ca.crt
+  kubectl -n "${K_NS}" get secret kafka-external-certificates -o jsonpath="{.data['client\.key']}" | base64 --decode > /tmp/client.key
+  kubectl -n "${K_NS}" get secret kafka-external-certificates -o jsonpath="{.data['client\.crt']}" | base64 --decode > /tmp/client.crt
   # or (doesn't completely work):
   # shellcheck disable=SC2259
-  ssh $todd kubectl -n secure-management get secret kafka-external-certificates -o jsonpath="{.data}" \
+  ssh $todd kubectl -n "${K_NS}" get secret kafka-external-certificates -o jsonpath="{.data}" \
     | python3 <<-EOF
   import json, sys, base64
   data = json.loads(sys.stdin.read())
@@ -229,12 +219,12 @@ EOF
 
 # -----[ Connections ]------
 function kafka.connections(){
-  external_ip="$(k -n secure-management get svc | grep istio-ingress | python -c 'from sys import stdin; print(stdin.read().split()[3])')"    # e.g 10.xxx.xxx.13
-  kafka_host="$(kubectl -n secure-management get vs | grep -Eo 'kafka.default.[[:alpha:]]+')"   # e.g kafka.default.todd
+  external_ip="$(k -n "${K_NS}" get svc | grep istio-ingress | python -c 'from sys import stdin; print(stdin.read().split()[3])')"    # e.g 10.xxx.xxx.13
+  kafka_host="$(kubectl -n "${K_NS}" get vs | grep -Eo 'kafka.default.[[:alpha:]]+')"   # e.g kafka.default.todd
   ### In /etc/hosts file:
   # <external_ip> isp.default.<machine_name>
   # <external_ip> kafka.default.<machine_name>
-  kafka_external_port="$(kubectl -n secure-management get svc | grep kafka-0 | grep -Po '(?<=:)\w+')"   # e.g 30094
+  kafka_external_port="$(kubectl -n "${K_NS}" get svc | grep kafka-0 | grep -Po '(?<=:)\w+')"   # e.g 30094
 }
 
 # =======================================
@@ -280,8 +270,8 @@ if [[ -n "$ZSH_VERSION" ]]; then
 else # not ZSH_VERSION
 #  if type complete &>/dev/null; then   # i think .bashrc already loads completions
 #    source <(kubectl completion bash)
-#    # if [[ -f /root/ksm-completion-bash ]]; then
-#    #   source /root/ksm-completion-bash
+#    # if [[ -f /root/kg-completion-bash ]]; then
+#    #   source /root/kg-completion-bash
 #    # fi
 #    # if [[ -f /root/k-completion-bash ]]; then
 #    #   source /root/k-completion-bash
